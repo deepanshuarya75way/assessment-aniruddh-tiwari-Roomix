@@ -88,7 +88,7 @@ export default function RoomPage({ params: paramsPromise }) {
       {/* HEADER - Mobile optimized */}
       <header className="flex flex-wrap items-center justify-between p-4 border-b border-border h-auto min-h-16 shrink-0 gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold truncate max-w-[150px] sm:max-w-xs">{room?.name}</h1>
+          <h1 className="text-xl font-bold truncate max-w-37.5 sm:max-w-xs">{room?.name}</h1>
           <span className="text-[10px] sm:text-xs px-2 py-1 bg-primary/20 text-primary rounded-full uppercase tracking-wider font-semibold">
             {role}
           </span>
@@ -135,13 +135,13 @@ export default function RoomPage({ params: paramsPromise }) {
           <div className={`flex-1 flex p-2 sm:p-4 gap-4 overflow-hidden ${isWhiteboardOpen ? "flex-col lg:flex-row" : "flex-col"}`}>
             
             {/* Video Player */}
-            <div className="flex-1 w-full h-full min-h-[300px] bg-secondary/10 rounded-xl p-2 border border-border flex items-center justify-center transition-all duration-300 shadow-sm">
+            <div className="flex-1 w-full h-full min-h-75 bg-secondary/10 rounded-xl p-2 border border-border flex items-center justify-center transition-all duration-300 shadow-sm">
               <Player roomId={roomId} />
             </div>
 
             {/* Whiteboard */}
             {isWhiteboardOpen && (
-              <div className="flex-1 w-full h-full min-h-[400px] transition-all duration-300 animate-in fade-in zoom-in-95">
+              <div className="flex-1 w-full h-full min-h-100 transition-all duration-300 animate-in fade-in zoom-in-95">
                 <Whiteboard roomId={roomId} />
               </div>
             )}

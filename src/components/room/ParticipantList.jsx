@@ -75,7 +75,7 @@ export default function ParticipantList({ roomId }) {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </div>
               
-              <span className="truncate max-w-[150px] text-muted-foreground">
+              <span className="truncate max-w-37.5 text-muted-foreground">
                 {p.email?.split('@')[0]}
                 {p.id === user?.id && " (You)"}
               </span>

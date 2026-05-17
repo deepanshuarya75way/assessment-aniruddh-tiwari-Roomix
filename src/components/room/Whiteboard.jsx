@@ -137,7 +137,7 @@ export default function Whiteboard({ roomId }) {
       </div>
 
       {/* Canvas Area */}
-      <div className="flex-1 relative cursor-crosshair min-h-[300px]">
+      <div className="flex-1 relative cursor-crosshair min-h-75">
         <canvas
           ref={canvasRef}
           onMouseDown={onMouseDown}
