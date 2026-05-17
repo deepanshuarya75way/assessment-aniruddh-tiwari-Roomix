@@ -24,11 +24,12 @@ export default function Chat({ roomId }) {
         .order("created_at", { ascending: true });
         
       if (data) setMessages(data);
+      if (error) console.error("History fetch error:", error);
     };
 
     fetchHistory();
 
-    // 2. The Realtime Subscription
+    // The Robust Realtime Subscription
     const channel = supabase
       .channel(`room_chat_${roomId}`)
       .on(
@@ -37,31 +38,40 @@ export default function Chat({ roomId }) {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `room_id=eq.${roomId}`,
+          filter: `room_id=eq.${roomId}`, // Track ONLY this room's messages
         },
         async (payload) => {
-          // When a new message hits the DB, fetch the sender's email
+          console.log("New real-time payload received:", payload);
+
+          // Fetch the sender's email profile instantly
           const { data: profileData } = await supabase
             .from("profiles")
             .select("email")
             .eq("id", payload.new.user_id)
-            .single();
+            .maybeSingle();
 
           const newMsg = {
             ...payload.new,
-            profiles: { email: profileData?.email || "Unknown" }
+            profiles: { email: profileData?.email || "User Joined" }
           };
 
-          setMessages((prev) => [...prev, newMsg]);
+          // Append to state immediately
+          setMessages((prev) => {
+            // Prevent duplicate message bugs
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Supabase Realtime Connection Status for Chat: ${status}`);
+      });
 
-    // Cleanup subscription when leaving the room
+    // Clean up subscription channel when component unmounts
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId]); 
 
   // 3. Auto-scroll to bottom
   useEffect(() => {

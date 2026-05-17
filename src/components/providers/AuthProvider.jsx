@@ -13,28 +13,57 @@ export const AuthProvider = ({ children }) => {
   const pathname = usePathname();
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setLoading(false);
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // 1. Get the current active session explicitly
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+        if (mounted) setLoading(false);
+      }
     };
 
-    getSession();
+    initializeAuth();
 
+    // 2. Continuous session event listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+      if (!mounted) return;
+
+      console.log(`Auth event triggered: ${event}`);
       
-      if (event === "SIGNED_IN") router.push("/dashboard");
-      if (event === "SIGNED_OUT") router.push("/login");
+      // Only update states on concrete changes to prevent tab-switching bugs
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setLoading(false);
+        router.push("/login");
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
-  // Protection logic
+  // 3. Resilient Route Guarding
   useEffect(() => {
-    if (!loading && !user && pathname !== "/login" && pathname !== "/") {
+    // If we are still checking the session from the cloud, do nothing!
+    if (loading) return;
+
+    // Only redirect if we are 100% certain the user is absent and trying to access a protected page
+    const isPublicPath = pathname === "/login" || pathname === "/";
+    
+    if (!user && !isPublicPath) {
+      console.log("Route guard activated: Redirecting unauthenticated user to login.");
       router.push("/login");
     }
   }, [user, loading, pathname, router]);
