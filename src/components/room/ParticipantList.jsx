@@ -11,7 +11,7 @@ export default function ParticipantList({ roomId }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   useEffect(() => {
-    if (!roomId || !user) return;
+    if (!roomId || !user?.id) return;
 
     // 1. Initialize a specific presence channel
     const presenceChannel = supabase.channel(`presence_${roomId}`, {
@@ -54,7 +54,7 @@ export default function ParticipantList({ roomId }) {
       presenceChannel.untrack();
       supabase.removeChannel(presenceChannel);
     };
-  }, [roomId, user, role]);
+  }, [roomId, user?.id, user?.email, role]);
 
   return (
     <div className="flex flex-col border-b border-border bg-card">

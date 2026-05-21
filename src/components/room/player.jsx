@@ -10,7 +10,6 @@ export default function Player({ roomId }) {
   const { room, role } = useRoomStore();
   const isHost = role === "host";
 
-  // Helper: Extract the 11-character YouTube ID from any YouTube URL
   const extractVideoId = (url) => {
     if (!url) return "";
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -18,16 +17,14 @@ export default function Player({ roomId }) {
     return match && match[2].length === 11 ? match[2] : "";
   };
 
-  // FIX 1: Initialize state directly using a function to avoid synchronous setState inside useEffect
   const [currentVideoId, setCurrentVideoId] = useState(() => 
     room?.current_video_url ? extractVideoId(room.current_video_url) : ""
   );
   const [videoUrl, setVideoUrl] = useState(room?.current_video_url || "");
   
   const playerRef = useRef(null);
-  const isIncomingEvent = useRef(false); // Gatekeeper to prevent infinite loops
+  const isIncomingEvent = useRef(false);
 
-  // FIX 2: Declared onPlayerStateChange ABOVE the useEffect hooks so it is fully accessible
   const onPlayerStateChange = (event) => {
     if (isIncomingEvent.current || !isHost) return;
 
@@ -35,21 +32,16 @@ export default function Player({ roomId }) {
     const currentTime = playerRef.current.getCurrentTime();
 
     if (event.data === window.YT.PlayerState.PLAYING) {
-      channel.send({
-        type: "broadcast",
-        event: "media_state",
-        payload: { action: "play", time: currentTime },
-      });
+      channel.send({ type: "broadcast", event: "media_state", payload: { action: "play", time: currentTime } });
     } else if (event.data === window.YT.PlayerState.PAUSED) {
-      channel.send({
-        type: "broadcast",
-        event: "media_state",
-        payload: { action: "pause", time: currentTime },
-      });
+      channel.send({ type: "broadcast", event: "media_state", payload: { action: "pause", time: currentTime } });
+    } else if (event.data === window.YT.PlayerState.ENDED) {
+      // Announce locally that the video ended so the Queue can Auto-Play
+      window.dispatchEvent(new CustomEvent("host_video_ended"));
     }
   };
 
-  // Load YouTube Iframe API
+  // Load YouTube API
   useEffect(() => {
     if (!currentVideoId) return;
 
@@ -64,15 +56,13 @@ export default function Player({ roomId }) {
       playerRef.current = new window.YT.Player(`yt-player-${roomId}`, {
         videoId: currentVideoId,
         playerVars: {
-          autoplay: 0,
-          controls: isHost ? 1 : 0, // Hide controls for participants
-          disablekb: isHost ? 0 : 1, // Disable keyboard shortcuts for participants
+          autoplay: 1, // Let's turn autoplay ON so when it skips, it plays instantly
+          controls: isHost ? 1 : 0,
+          disablekb: isHost ? 0 : 1,
           modestbranding: 1,
           rel: 0,
         },
-        events: {
-          onStateChange: onPlayerStateChange,
-        },
+        events: { onStateChange: onPlayerStateChange },
       });
     };
 
@@ -83,13 +73,11 @@ export default function Player({ roomId }) {
     }
 
     return () => {
-      if (playerRef.current && playerRef.current.destroy) {
-        playerRef.current.destroy();
-      }
+      if (playerRef.current && playerRef.current.destroy) playerRef.current.destroy();
     };
   }, [currentVideoId, roomId, isHost]);
 
-  // Setup Realtime Syncing
+  // Setup Realtime Syncing & No-Reload Video Swapping
   useEffect(() => {
     if (!roomId) return;
 
@@ -97,46 +85,52 @@ export default function Player({ roomId }) {
       .channel(`video_sync_${roomId}`)
       .on("broadcast", { event: "media_state" }, ({ payload }) => {
         if (isHost) return;
-
         const player = playerRef.current;
         if (!player || !player.getPlayerState) return;
 
-        const { action, time } = payload;
         isIncomingEvent.current = true;
-
-        if (action === "play") {
-          player.seekTo(time, true);
+        if (payload.action === "play") {
+          player.seekTo(payload.time, true);
           player.playVideo();
-        } else if (action === "pause") {
+        } else if (payload.action === "pause") {
           player.pauseVideo();
-          player.seekTo(time, true);
-        } else if (action === "seek") {
-          player.seekTo(time, true);
+          player.seekTo(payload.time, true);
         }
-
         setTimeout(() => { isIncomingEvent.current = false; }, 100);
+      })
+      // Listen for Host changing the video
+      .on("broadcast", { event: "change_video" }, ({ payload }) => {
+        setCurrentVideoId(extractVideoId(payload.url));
+        setVideoUrl(payload.url);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Listen for LOCAL video changes (so Host doesn't need to reload page)
+    const handleLocalChange = (e) => {
+      setCurrentVideoId(extractVideoId(e.detail.url));
+      setVideoUrl(e.detail.url);
+    };
+    window.addEventListener("force_video_change", handleLocalChange);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      window.removeEventListener("force_video_change", handleLocalChange);
+    };
   }, [roomId, isHost]);
 
-  // Change Video URL (Host Only)
+  // Manual Update
   const handleUpdateVideo = async (e) => {
     e.preventDefault();
     const targetId = extractVideoId(videoUrl);
     if (!targetId) return alert("Invalid YouTube URL");
 
-    const { error } = await supabase
-      .from("rooms")
-      .update({ current_video_url: videoUrl })
-      .eq("id", roomId);
-
-    if (error) {
-      alert("Failed to update video.");
-    } else {
+    const { error } = await supabase.from("rooms").update({ current_video_url: videoUrl }).eq("id", roomId);
+    if (!error) {
       setCurrentVideoId(targetId);
-      window.location.reload();
+      // Broadcast to participants to update smoothly
+      supabase.channel(`video_sync_${roomId}`).send({
+        type: "broadcast", event: "change_video", payload: { url: videoUrl },
+      });
     }
   };
 
@@ -148,25 +142,20 @@ export default function Player({ roomId }) {
             placeholder="Paste YouTube Video URL..."
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            className="flex-1 bg-background"
+            className="flex-1 bg-background text-xs"
           />
-          <Button type="submit">Change Video</Button>
+          <Button type="submit" size="sm">Change Video</Button>
         </form>
       )}
 
-      {/* Video Container */}
-      <div className="flex-1 relative w-full bg-black rounded-xl overflow-hidden min-h-75">
+      <div className="flex-1 relative w-full bg-black rounded-xl overflow-hidden min-h-[300px]">
         {currentVideoId ? (
           <>
-            <div id={`yt-player-${roomId}`} className="absolute inset-0 w-full h-full" />
-            {!isHost && (
-              <div className="absolute inset-0 z-50 bg-transparent w-full h-full cursor-not-allowed" />
-            )}
+            <div id={`yt-player-${roomId}`} className="absolute inset-0 w-full h-full pointer-events-auto" />
+            {!isHost && <div className="absolute inset-0 z-50 bg-transparent w-full h-full cursor-not-allowed" />}
           </>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            No video loaded.
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">No video loaded.</div>
         )}
       </div>
     </div>
