@@ -41,7 +41,7 @@ export default function RoomPage({ params: paramsPromise }) {
   const [isVideoOpen, setIsVideoOpen] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   // Sidebar Interface States
-  const [activeTab, setActiveTab] = useState("chat"); // 'chat' or 'queue'
+  const [activeTab, setActiveTab] = useState("chat"); 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Sidebar Draggable Dimension States
@@ -123,11 +123,16 @@ export default function RoomPage({ params: paramsPromise }) {
     if (!roomId) return;
     
     const channel = supabase
-      .channel(`screen_sync_${roomId}`)
-      .on("broadcast", { event: "toggle_screen" }, ({ payload }) => {
+      .channel(`screen_sync_page_${roomId}`)
+      .on("broadcast", { event: "screen_share_started" }, () => {
         if (role !== "host") {
-          setIsScreenSharing(payload.isSharing);
-          if (payload.isSharing) setIsVideoOpen(true);
+          setIsScreenSharing(true);
+          setIsVideoOpen(true);
+        }
+      })
+      .on("broadcast", { event: "screen_share_stopped" }, () => {
+        if (role !== "host") {
+          setIsScreenSharing(false);
         }
       })
       .subscribe();
