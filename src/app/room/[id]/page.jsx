@@ -12,6 +12,7 @@ import Whiteboard from "@/components/room/Whiteboard";
 import VideoQueue from "@/components/room/VideoQueue";
 import HeaderAvatars from "@/components/room/HeaderAvatars";
 import ScreenShare from "@/components/room/ScreenShare";
+import ModerationPanel from "@/components/room/ModerationPanel";
 import { ScreenShare as ScreenShareIcon } from "lucide-react"; 
 import { toast } from "sonner";
 import { 
@@ -357,6 +358,19 @@ export default function RoomPage({ params: paramsPromise }) {
             >
               <ListVideo className="w-4 h-4" />
             </Button>
+            
+            {["host", "owner", "moderator"].includes(role) && (
+              <Button
+                variant={activeTab === "safety" ? "secondary" : "ghost"}
+                size="sm"
+                title="Safety Center"
+                className="flex-1 h-9"
+                onClick={() => setActiveTab("safety")}
+              >
+                Safety
+              </Button>
+            )}
+
           </div>
 
           {/* SYSTEM SIDEBAR VIEW LAYOUT CHANNELS */}
@@ -370,6 +384,14 @@ export default function RoomPage({ params: paramsPromise }) {
             <div className={activeTab === "queue" ? "flex-1 overflow-hidden flex flex-col" : "hidden"}>
               <VideoQueue roomId={roomId} />
             </div>
+            
+            {activeTab === "safety" &&
+              ["host", "owner", "moderator"].includes(role) && (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ModerationPanel roomId={roomId} role={role} />
+                </div>
+              )}
+
           </div>
           
         </div>
